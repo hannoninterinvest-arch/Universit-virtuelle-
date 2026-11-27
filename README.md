@@ -56,3 +56,9 @@ Les e-mails d’authentification utilisent le service partagé Neon pour les ess
 ## Déploiement
 
 Projet Vercel : `hannon-universite-virtuelle`. Variables serveur requises : `DATABASE_URL`, `NEON_AUTH_BASE_URL`, `NEON_AUTH_COOKIE_SECRET`. Autoriser l’origine exacte du déploiement dans les domaines de confiance Neon Auth. Les fonctions sont placées à Francfort, comme la base.
+
+## Vérifications de cette version
+
+Compilation de production, vérification TypeScript et 4 tests de validation réussis. Sur le déploiement connecté à Neon : création d’un compte fictif, session authentifiée, affichage de l’inscription, sauvegarde du brouillon, transmission et verrouillage du dossier confirmés. Un étudiant sans rôle administratif ne peut pas consulter la liste des dossiers. Le contrôle visuel de l’accueil et du formulaire de création de compte a été effectué, ainsi que la redirection des visiteurs non connectés.
+
+L’essai d’une décision administrative a été arrêté par le contrôle automatique d’autorisation ; aucune décision d’admission n’a été enregistrée. L’accès administratif temporaire a été retiré. Un compte fictif et son dossier clairement nommé TEST TECHNIQUE restent présents pour traçabilité. La réception des codes e-mail reste à vérifier avec une boîte contrôlée, et un responsable doit être désigné avant d’activer l’accès administratif réel.
