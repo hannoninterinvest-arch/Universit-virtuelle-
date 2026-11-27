@@ -62,3 +62,21 @@ Projet Vercel : `hannon-universite-virtuelle`. Variables serveur requises : `DAT
 Compilation de production, vérification TypeScript et 4 tests de validation réussis. Sur le déploiement connecté à Neon : création d’un compte fictif, session authentifiée, affichage de l’inscription, sauvegarde du brouillon, transmission et verrouillage du dossier confirmés. Un étudiant sans rôle administratif ne peut pas consulter la liste des dossiers. Le contrôle visuel de l’accueil et du formulaire de création de compte a été effectué, ainsi que la redirection des visiteurs non connectés.
 
 L’essai d’une décision administrative a été arrêté par le contrôle automatique d’autorisation ; aucune décision d’admission n’a été enregistrée. L’accès administratif temporaire a été retiré. Un compte fictif et son dossier clairement nommé TEST TECHNIQUE restent présents pour traçabilité. La réception des codes e-mail reste à vérifier avec une boîte contrôlée, et un responsable doit être désigné avant d’activer l’accès administratif réel.
+
+## Campus pédagogique
+
+`/administration/pedagogie` permet de créer et modifier des classes (code, année, niveau). Chaque classe propose cinq onglets : matières et cours, étudiants, emploi du temps, notes et paramètres.
+
+- Affectation d’un compte étudiant par son e-mail, avec activation ou désactivation de l’accès à cette classe. Plusieurs classes sont possibles. Cette affectation ne modifie ni les droits administratifs ni la décision d’admission.
+- Matières avec enseignant, coefficient, présentation, code et lien Google Classroom.
+- Supports de type lien de cours, PDF/Drive, vidéo ou publication Classroom, avec brouillon, publication et ordre d’affichage.
+- Séances hebdomadaires en ligne, avec période de validité, horaires de Tunis et lien de connexion. Un verrou transactionnel par classe empêche les créations concurrentes de créneaux qui se chevauchent.
+- Notes par étudiant et matière, avec évaluation, date, barème, coefficient, commentaire et publication explicite. La modification d’une note conserve son étudiant et sa matière. Chaque modification est tracée et protégée contre l’écrasement concurrent.
+
+Espaces étudiants : `/espace-etudiant/matieres`, `/espace-etudiant/emploi-du-temps` et `/espace-etudiant/notes`. L’appartenance active à la classe est vérifiée dans chaque requête, y compris pour les URL directes des cours. Les brouillons et les notes des autres étudiants ne sont pas envoyés au navigateur. Une classe ou matière archivée disparaît de l’espace étudiant, sans supprimer ses données.
+
+Les PDF Google Drive sont affichés via leur lecteur de prévisualisation ; les liens directs terminant par `.pdf` sont également acceptés. Les autorisations Google restent nécessaires et le bouton d’ouverture externe reste disponible si le navigateur refuse l’intégration. Les liens Classroom s’ouvrent sur Google avec le code fourni : aucune synchronisation des contenus, des affectations ou des notes Classroom n’est activée. Les notes affichées sur HANNON sont saisies dans HANNON. Les moyennes sur 20 sont indicatives et pondérées par les coefficients des évaluations publiées.
+
+Migration : `db/002_academics.sql`, additive et rejouable ; `npm run db:migrate` exécute désormais les fichiers SQL dans l’ordre avec une transaction par fichier. Migration d’abord validée sur la branche isolée `dev-pedagogie-20261127`, puis appliquée à la branche principale. Aucun étudiant n’a été affecté et aucune note n’a été créée sur la branche principale pendant le développement.
+
+Validation pédagogique : 12 tests au total et compilation Next.js/TypeScript réussis. Les essais SQL isolés confirment l’exclusion des brouillons, des autres classes et d’un autre étudiant ainsi que la détection des chevauchements et l’acceptation de créneaux adjacents. Les formulaires administratifs et le parcours pédagogique avec un compte réellement affecté restent à vérifier après désignation du responsable ; aucun privilège administratif n’a été attribué pour ces essais.
