@@ -2,6 +2,7 @@ import 'server-only';
 import { redirect } from 'next/navigation';
 import { auth } from './auth-server';
 import { db } from './db';
+import { redeemStaffInvitationSql } from './staff-invitation';
 export async function currentUser() {
   const { data: session, error } = await auth.getSession();
   if (error || !session?.user) return null;
@@ -13,7 +14,7 @@ export async function requireUser() {
   return user;
 }
 export async function isStaff(userId: string) {
-  const r = await db.query('SELECT 1 FROM university.staff_members WHERE user_id = $1', [userId]);
+  const r = await db.query(redeemStaffInvitationSql, [userId]);
   return r.rowCount === 1;
 }
 export async function requireStaff() {

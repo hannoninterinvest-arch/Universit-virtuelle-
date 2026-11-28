@@ -31,6 +31,8 @@ npm run dev
 
 Les nouveaux comptes sont uniquement étudiants. Aucun premier utilisateur ni domaine e-mail ne devient administrateur automatiquement.
 
+Une adresse précise peut être réservée par le propriétaire dans `university.staff_invitations`. Le compte correspondant doit être créé et son adresse vérifiée avant tout accès administratif. La réservation est consommée une seule fois lors de la consultation de l’espace authentifié ; retirer ensuite le rôle ne le réattribue pas. Les comptes non vérifiés ou bannis ne peuvent pas consommer une réservation. Aucun secret ni mot de passe n’est créé par cette réservation.
+
 1. Créer le compte de la personne désignée.
 2. Vérifier son e-mail dans `/auth/verify-email`.
 3. Depuis un environnement de confiance disposant de `DATABASE_URL` :
