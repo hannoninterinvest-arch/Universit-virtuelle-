@@ -2,7 +2,11 @@
 import { revalidatePath } from 'next/cache';
 import type { PoolClient } from 'pg';
 import { z } from 'zod';
-import { requireStaff } from '@/lib/access';
+import { requireUser,isStaff } from '@/lib/access';
+import { canTeach } from '@/lib/campus-access';
+import { notify,notifyClass } from '@/lib/notifications';
+import { after } from 'next/server';
+import { deliverOutbox } from '@/lib/mail';
 import { db } from '@/lib/db';
 import { classSchema,subjectSchema,resourceSchema,membershipSchema,timetableSchema,gradeSchema,type AcademicKind,type AcademicResult } from '@/lib/academics';
 class AcademicError extends Error {}
@@ -23,8 +27,8 @@ async function persist(client:PoolClient,table:Table,values:Record<string,unknow
   return rows[0].id as string;
 }
 export async function saveAcademicItem(kind:AcademicKind,input:unknown):Promise<AcademicResult> {
-  const user=await requireStaff();
-  if(!user)return {ok:false,message:'Accès réservé à l’administration.'};
+  const user=await requireUser(),staff=await isStaff(user.id);
+  if(!staff&&!['resource','grade','timetable'].includes(kind))return{ok:false,message:'Accès réservé à l’administration.'};
   const schemas={class:classSchema,subject:subjectSchema,resource:resourceSchema,membership:membershipSchema,timetable:timetableSchema,grade:gradeSchema};
   if(!Object.hasOwn(schemas,kind))return {ok:false,message:'Opération invalide.'};
   const validated=schemas[kind].safeParse(input);
@@ -33,6 +37,7 @@ export async function saveAcademicItem(kind:AcademicKind,input:unknown):Promise<
   try {
     await client.query('BEGIN');
     const raw=validated.data;
+    if(!staff){if(!('subjectId' in raw)||!await canTeach(user.id,raw.subjectId))throw new AcademicError('Cette matière ne vous est pas attribuée.');if('id' in raw&&raw.id){const table=kind==='resource'?'course_resources':kind==='timetable'?'timetable_entries':'grades';const original=await client.query(`SELECT 1 FROM university.${table} WHERE id=$1 AND subject_id=$2`,[raw.id,raw.subjectId]);if(!original.rowCount)throw new AcademicError('Cet élément ne vous est pas accessible.');}}
     classId='classId' in raw?raw.classId:raw.id||undefined;
     if(classId){const locked=await client.query('SELECT id FROM university.academic_classes WHERE id=$1 FOR UPDATE',[classId]);if(!locked.rowCount)throw new AcademicError('Classe introuvable.');}
     if(kind==='class') {
@@ -54,7 +59,8 @@ export async function saveAcademicItem(kind:AcademicKind,input:unknown):Promise<
       if(kind==='resource') {
         const d=resourceSchema.parse(input);
         if(d.published&&!subject.rows[0].active)throw new AcademicError('Réactivez la matière avant de publier un cours.');
-        id=await persist(client,'course_resources',{subject_id:d.subjectId,title:d.title,kind:d.kind,url:d.url,summary:d.summary,published:d.published,sort_order:d.sortOrder},d.id,d.version,d.classId);
+        if(d.documentId){const file=await client.query('SELECT content_type FROM university.documents WHERE id=$1 AND (owner_id=$2 OR $3)',[d.documentId,user.id,staff]);if(!file.rowCount)throw new AcademicError('Ce fichier ne vous appartient pas.');if(d.kind==='pdf'&&file.rows[0].content_type!=='application/pdf')throw new AcademicError('Choisissez un fichier PDF.');if(d.url!=='https://hannon-universite-virtuelle.vercel.app/api/fichiers/'+d.documentId)throw new AcademicError('Le lien ne correspond pas au fichier déposé.');}else if(new URL(d.url).hostname==='hannon-universite-virtuelle.vercel.app'&&new URL(d.url).pathname.startsWith('/api/fichiers/'))throw new AcademicError('Déposez ce fichier depuis le formulaire pour le partager avec votre classe.');
+        id=await persist(client,'course_resources',{document_id:d.documentId||null,subject_id:d.subjectId,title:d.title,kind:d.kind,url:d.url,summary:d.summary,published:d.published,sort_order:d.sortOrder},d.id,d.version,d.classId);
       } else if(kind==='timetable') {
         const d=timetableSchema.parse(input);
         if(d.active) {
@@ -65,6 +71,7 @@ export async function saveAcademicItem(kind:AcademicKind,input:unknown):Promise<
         id=await persist(client,'timetable_entries',{class_id:d.classId,subject_id:d.subjectId,title:d.title,weekday:d.weekday,start_time:d.startTime,end_time:d.endTime,start_date:d.startDate||null,end_date:d.endDate||null,meeting_url:d.meetingUrl,active:d.active},d.id,d.version,d.classId);
       } else if(kind==='grade') {
         const d=gradeSchema.parse(input);
+        if(d.id){const linked=(await client.query('SELECT submission_id FROM university.grades WHERE id=$1',[d.id])).rows[0];if(linked?.submission_id)throw new AcademicError('Modifiez cette note depuis la correction de la copie, dans l’espace enseignant.');}
         if(d.id){const existing=await client.query('SELECT 1 FROM university.grades WHERE id=$1 AND class_id=$2 AND student_id=$3 AND subject_id=$4',[d.id,d.classId,d.studentId,d.subjectId]);if(!existing.rowCount)throw new AcademicError('Une note existante doit rester rattachée au même étudiant et à la même matière.');}
         const member=await client.query('SELECT 1 FROM university.class_memberships WHERE class_id=$1 AND student_id=$2 AND active',[d.classId,d.studentId]);
         if(!member.rowCount)throw new AcademicError('L’étudiant doit être affecté à cette classe pour recevoir une note.');
@@ -72,6 +79,8 @@ export async function saveAcademicItem(kind:AcademicKind,input:unknown):Promise<
       }
     }
     await client.query('INSERT INTO university.academic_events(actor_id,entity_type,entity_id,class_id,changes) VALUES($1,$2,$3,$4,$5::jsonb)',[user.id,kind,id,classId,JSON.stringify(validated.data)]);
+    if('published' in raw&&raw.published){if(kind==='grade'&&'studentId'in raw)await notify(client,raw.studentId,'Une note est disponible','Consultez vos résultats dans votre espace étudiant.','/espace-etudiant/notes');else if(kind==='resource'&&classId)await notifyClass(client,classId,'Un cours est disponible','Un support de cours a été publié ou mis à jour.','/espace-etudiant/matieres');}
+    if(kind==='timetable'&&classId)await notifyClass(client,classId,'Emploi du temps mis à jour','Vérifiez les horaires et les liens de vos séances.','/espace-etudiant/emploi-du-temps');
     await client.query('COMMIT');
   } catch(error) {
     await client.query('ROLLBACK');
@@ -82,5 +91,7 @@ export async function saveAcademicItem(kind:AcademicKind,input:unknown):Promise<
   } finally {client.release();}
   revalidatePath('/administration/pedagogie','layout');
   revalidatePath('/espace-etudiant','layout');
+  revalidatePath('/enseignant','layout');
+  after(()=>deliverOutbox().then(()=>{}));
   return {ok:true,id,message:kind==='membership'?'L’affectation à la classe a été enregistrée.':'L’enregistrement a été effectué.'};
 }

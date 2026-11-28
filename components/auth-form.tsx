@@ -4,9 +4,12 @@ import { useState, type FormEvent } from 'react';
 import { ArrowRight, Eye, EyeOff, LoaderCircle } from 'lucide-react';
 import { authClient } from '@/lib/auth-client';
 import { SecureNote } from './ui';
-export function AuthForm({ mode }: { mode:string }) {
+import { safeReturnTo } from '@/lib/safe-return';
+export function AuthForm({ mode,returnTo='/espace-etudiant' }: { mode:string;returnTo?:string }) {
   const [busy,setBusy]=useState(false); const [message,setMessage]=useState(''); const [success,setSuccess]=useState(false); const [show,setShow]=useState(false); const [sent,setSent]=useState(false);
   const signup=mode==='sign-up', forgot=mode==='forgot-password', reset=mode==='reset-password', verify=mode==='verify-email';
+  const returnPath=()=>safeReturnTo(returnTo);
+  const authLink=(path:string)=>`${path}?redirectTo=${encodeURIComponent(returnPath())}`;
   async function handleSubmit(event:FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setMessage(''); setSuccess(false);
     const fd=new FormData(event.currentTarget), email=String(fd.get('email')??'').trim().toLowerCase(), password=String(fd.get('password')??''), otp=String(fd.get('otp')??'');
@@ -15,7 +18,7 @@ export function AuthForm({ mode }: { mode:string }) {
       if (signup) {
         const {error}=await authClient.signUp.email({email,password,name:String(fd.get('name')).trim()});
         if(error) { setMessage(error.code==='USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL' ? 'Un compte existe déjà avec cette adresse. Connectez-vous.' : error.message || 'La création du compte a échoué.'); return; }
-        window.location.assign('/espace-etudiant');
+        window.location.assign(returnPath());
       } else if(forgot) {
         const {error}=await authClient.emailOtp.requestPasswordReset({email});
         if(error) { setMessage('L’envoi du code est momentanément indisponible. Réessayez.'); return; }
@@ -31,7 +34,7 @@ export function AuthForm({ mode }: { mode:string }) {
       } else {
         const {error}=await authClient.signIn.email({email,password});
         if(error) { setMessage(error.status===401 || error.code==='INVALID_EMAIL_OR_PASSWORD' ? 'Adresse e-mail ou mot de passe incorrect.' : error.message || 'Connexion impossible. Réessayez.'); return; }
-        window.location.assign('/espace-etudiant');
+        window.location.assign(returnPath());
       }
     } catch { setMessage('La connexion a été interrompue. Réessayez dans un instant.'); } finally { setBusy(false); }
   }
@@ -46,6 +49,7 @@ export function AuthForm({ mode }: { mode:string }) {
     <button className="button wide" disabled={busy}>{busy?<LoaderCircle className="spin" size={18}/>:null}{busy?'Veuillez patienter…':label}{!busy&&<ArrowRight size={17}/>}</button>
     {forgot&&sent&&<Link className="button secondary wide" href="/auth/reset-password">J’ai reçu mon code</Link>}
     {verify&&sent&&<button className="text-link resend" type="button" disabled={busy} onClick={()=>{setSent(false);setMessage('');}}>Renvoyer un code</button>}
-    <p className="auth-switch">{signup?<>Vous avez déjà un compte ? <Link href="/auth/sign-in">Se connecter</Link></>:forgot||reset||verify?<Link href="/auth/sign-in">Retour à la connexion</Link>:<>Vous n’avez pas de compte ? <Link href="/auth/sign-up">Créer mon compte</Link></>}</p><SecureNote/>
+    {verify&&success&&sent&&message==='Votre adresse e-mail est vérifiée.'&&<Link className="button secondary wide" href={returnTo}>Retour à mon espace</Link>}
+    <p className="auth-switch">{signup?<>Vous avez déjà un compte ? <Link href={authLink('/auth/sign-in')}>Se connecter</Link></>:forgot||reset||verify?<Link href={authLink('/auth/sign-in')}>Retour à la connexion</Link>:<>Vous n’avez pas de compte ? <Link href={authLink('/auth/sign-up')}>Créer mon compte</Link></>}</p><SecureNote/>
   </form>;
 }

@@ -1,0 +1,8 @@
+import 'server-only';
+import { PDFDocument,rgb } from 'pdf-lib';
+import fontkit from '@pdf-lib/fontkit';
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
+export async function campusPdf(title:string,subtitle:string,lines:string[]){const pdf=await PDFDocument.create();pdf.registerFontkit(fontkit);const font=await pdf.embedFont(await readFile(join(process.cwd(),'assets/DejaVuSans.ttf')),{subset:true});let page=pdf.addPage([595.28,841.89]),y=745;const navy=rgb(.06,.12,.23),gold=rgb(.66,.5,.27);function header(){page.drawRectangle({x:0,y:790,width:596,height:52,color:navy});page.drawText('HANNON | UNIVERSITÉ VIRTUELLE',{x:42,y:810,size:12,font,color:rgb(1,1,1)});page.drawText(title,{x:42,y:755,size:19,font,color:navy});y=728;page.drawText(subtitle,{x:42,y,size:9,font,color:gold});y-=34;}header();function wrap(text:string){const words=text.split(/\s+/),rows:string[]=[];let line='';for(const w of words){const test=line?line+' '+w:w;if(font.widthOfTextAtSize(test,10)>505&&line){rows.push(line);line=w;}else line=test;}if(line)rows.push(line);return rows;}
+for(const line of lines){for(const row of wrap(line||' ')){if(y<80){page=pdf.addPage([595.28,841.89]);header();}page.drawText(row,{x:42,y,size:10,font,color:navy});y-=18;}y-=8;}
+for(const [i,p]of pdf.getPages().entries()){p.drawLine({start:{x:42,y:55},end:{x:553,y:55},color:gold,thickness:.5});p.drawText(`HANNON International Investments · contact@hannoninterinvest.com · ${i+1}/${pdf.getPageCount()}`,{x:42,y:39,size:7,font,color:navy});}pdf.setTitle(title);pdf.setAuthor('HANNON Université virtuelle');return Buffer.from(await pdf.save());}

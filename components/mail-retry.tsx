@@ -1,0 +1,3 @@
+'use client';
+import { useState } from 'react';
+export function MailRetry(){const[busy,setBusy]=useState(false),[message,setMessage]=useState('');return <div className="mail-retry"><button className="button secondary" disabled={busy} onClick={async()=>{setBusy(true);try{const r=await fetch('/api/courriels',{method:'POST'}),d=await r.json();setMessage(r.ok?(d.configured?`${d.sent} courriel(s) envoyé(s). Les messages non distribués restent en attente.`:'Renseignez d’abord la configuration SMTP du campus.'):'Envoi impossible.');}catch{setMessage('Envoi impossible. Vérifiez votre connexion.');}finally{setBusy(false);}}}>{busy?'Envoi…':'Relancer les courriels en attente'}</button>{message&&<p className="form-hint" role="status">{message}</p>}</div>;}
