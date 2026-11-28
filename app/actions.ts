@@ -17,7 +17,7 @@ export async function saveApplication(input: unknown, submit: boolean, version: 
   const { rows } = await db.query(`WITH saved AS (
     INSERT INTO university.applications(user_id,data,status,submitted_at)
     SELECT $1,$2::jsonb,$3,CASE WHEN $3='submitted' THEN now() END WHERE $4=0
-    ON CONFLICT (user_id) DO UPDATE SET data=excluded.data,status=CASE WHEN $3='submitted' THEN 'submitted' ELSE university.applications.status END,
+    ON CONFLICT (user_id) WHERE program_id IS NULL DO UPDATE SET data=excluded.data,status=CASE WHEN $3='submitted' THEN 'submitted' ELSE university.applications.status END,
       submitted_at=CASE WHEN $3='submitted' THEN now() ELSE university.applications.submitted_at END,
       version=university.applications.version+1,updated_at=now()
     WHERE university.applications.status IN ('draft','needs_changes') AND university.applications.version=$4
@@ -25,7 +25,7 @@ export async function saveApplication(input: unknown, submit: boolean, version: 
   ), updated AS (
     UPDATE university.applications SET data=$2::jsonb,status=CASE WHEN $3='submitted' THEN 'submitted' ELSE status END,
       submitted_at=CASE WHEN $3='submitted' THEN now() ELSE submitted_at END,version=version+1,updated_at=now()
-    WHERE user_id=$1 AND version=$4 AND $4>0 AND status IN ('draft','needs_changes') RETURNING id,version
+    WHERE user_id=$1 AND program_id IS NULL AND version=$4 AND $4>0 AND status IN ('draft','needs_changes') RETURNING id,version
   ), changed AS (SELECT * FROM saved UNION ALL SELECT * FROM updated), logged AS (
     INSERT INTO university.application_events(application_id,actor_id,event)
     SELECT id,$1,$3 FROM changed WHERE $3='submitted' RETURNING id
