@@ -31,5 +31,5 @@ export function mayEdit(status: Status) { return status === 'draft' || status ==
 export function mayReview(status: Status) { return status === 'submitted'; }
 export function reference(id: string) { return `UV-${id.slice(0,8).toUpperCase()}`; }
 export function formatDate(date: string | Date | null) { return date ? new Intl.DateTimeFormat('fr-TN', { dateStyle: 'medium', timeZone: 'Africa/Tunis' }).format(new Date(date)) : '—'; }
-export type Application = { id: string; user_id: string; data: Fields; status: Status; version: number; admin_note: string; created_at: string; updated_at: string; submitted_at: string | null; email?: string; name?: string; };
+export type Application = { id: string; user_id: string; data: Fields; status: Status; version: number; admin_note: string; created_at: string; updated_at: string; submitted_at: string | null; email?: string; name?: string; program_id?: string|null; form_version?: number|null; form_snapshot?: import('./program-forms').Field[]|null; form_answers?: import('./program-forms').Answers; };
 export type AdmissionEvent = { id: string; event: Status; note: string; created_at: string; };

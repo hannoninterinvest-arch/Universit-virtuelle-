@@ -49,10 +49,10 @@ export async function reviewApplication(input: unknown): Promise<ActionResult> {
   if (status !== 'accepted' && note.length < 5) return { ok:false, message:'Expliquez les compléments demandés ou le motif du refus.' };
   const { rows } = await db.query(`WITH changed AS (
     UPDATE university.applications SET status=$1,admin_note=$2,reviewed_by=$3,version=version+1,updated_at=now()
-    WHERE id=$4 AND version=$5 AND status='submitted' RETURNING id,user_id
+    WHERE id=$4 AND version=$5 AND status='submitted' RETURNING id,user_id,program_id
   ), logged AS (INSERT INTO university.application_events(application_id,actor_id,event,note)
     SELECT id,$3,$1,$2 FROM changed RETURNING application_id), notified AS (
-    INSERT INTO university.notifications(user_id,title,body,href) SELECT user_id,'Mise à jour de votre candidature','Consultez la décision et le message du service des admissions.','/espace-etudiant/inscription' FROM changed RETURNING id
+    INSERT INTO university.notifications(user_id,title,body,href) SELECT user_id,'Mise à jour de votre candidature','Consultez la décision et le message du service des admissions.',CASE WHEN program_id IS NULL THEN '/espace-etudiant/inscription?legacy=1' ELSE '/espace-etudiant/inscription?formation='||program_id::text END FROM changed RETURNING id
   ), queued AS (INSERT INTO university.email_outbox(notification_id) SELECT id FROM notified RETURNING id)
   SELECT id FROM changed`, [status,note,user.id,id,version]);
   if (!rows.length) return { ok:false, message:'Ce dossier a déjà été traité ou modifié. Rechargez la page.' };
